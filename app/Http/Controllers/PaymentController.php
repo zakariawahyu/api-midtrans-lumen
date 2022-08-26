@@ -4,10 +4,26 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Payment;
+use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\Customer;
 use Illuminate\Support\Facades\Log;
 
 class PaymentController extends Controller
 {
+
+    public function __construct()
+    {
+        // Set your Merchant Server Key
+        \Midtrans\Config::$serverKey = env("MIDTRANS_SERVER_KEY");
+        // Set to Development/Sandbox Environment (default). Set to true for Production Environment (accept real transaction).
+        \Midtrans\Config::$isProduction = env("MIDTRANS_PRODUCTION");
+        // Set sanitization on (default)
+        \Midtrans\Config::$isSanitized = true;
+        // Set 3DS transaction for credit card to true
+        \Midtrans\Config::$is3ds = true;
+    }
+
     /**
      * Display a listing of the resource.
      *
@@ -77,17 +93,6 @@ class PaymentController extends Controller
         $data->transaction_status = "created";
         $data->save();
 
-        Log::info('Adding payment');
-
-        $item_list = array();
-        $amount = 0;
-        if (!isset(Config::$serverKey)) {
-            return "Please set your payment server key";
-        }
-
-        Config::$isSanitized = true;
-        Config::$is3ds = true;
-
         $orderitem = OrderItem::where('order_id', $data->order_id)->with(array('product'=>function($query){
             $query->select();
         }))->get();
@@ -103,7 +108,7 @@ class PaymentController extends Controller
 
         $transaction_details = array(
             'gross_amount' => $data->gross_amount,
-            'order_id' => $data->order_id,
+            'order_id' => "27082022"+$data->order_id,
         );
 
         $order = Order::find($data->order_id);
@@ -128,7 +133,7 @@ class PaymentController extends Controller
         );
 
         try {
-            $midtrans = Snap::createTransaction($transaction);
+            $midtrans = \Midtrans\CoreApi::charge($transaction);
 
             return response()->json([
                 "message" => "Transaction added successfully",
@@ -184,13 +189,6 @@ class PaymentController extends Controller
         $data = $data->data;
         $id_order = $data->order_id;
 
-        if(!isset(Config::$serverKey))
-        {
-            return "Please set your payment server key";
-        }
-
-        Config::$isSanitized = true;
-        Config::$is3ds = true;
         $url = "https://api.sandbox.midtrans.com/v2/". $id_order. "/status";
         $curl = curl_init("$url");
         curl_setopt($curl, CURLOPT_HTTPHEADER, array(
